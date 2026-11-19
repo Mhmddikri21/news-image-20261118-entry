@@ -1,33 +1,39 @@
 #!/usr/bin/env python3
-"""news-image-20261118 entry: sum up 18 November 2026 world news in one
-image. The image is pre-rendered (entry.png, 1024x1024, 55 stories) by the
-PIL builder in the work dir; the entrypoint copies it to /output/entry.png
-deterministically — no network, no clock, no randomness."""
-import os
+"""news-image-20261118: one broadsheet of 18 November 2026 world news.
+
+The image itself is pre-rendered (entry.png, 1024x1024, 55 stories). This
+entrypoint only places it at /output/entry.png. No network, no clock, no
+randomness: the same bytes come out on every run.
+"""
+from pathlib import Path
 import shutil
 import struct
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "entry.png")
-DST = "/output/entry.png"
+IMAGE = Path(__file__).resolve().parent / "entry.png"
+OUTPUT = Path("/output/entry.png")
+EXPECTED = (1024, 1024)
 
 
-def verify(path):
-    """Check the output is a valid PNG of the expected size (stdlib only)."""
-    with open(path, "rb") as f:
-        head = f.read(33)
-    assert head[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
-    assert head[12:16] == b"IHDR", "missing IHDR"
-    width, height = struct.unpack(">II", head[16:24])
-    assert (width, height) == (1024, 1024), f"unexpected size {width}x{height}"
-    return width, height
+def check_png(path):
+    """Return (width, height) if path is a valid PNG of the expected size."""
+    blob = path.read_bytes()[:33]
+    if blob[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG file")
+    if blob[12:16] != b"IHDR":
+        raise ValueError("PNG has no IHDR chunk")
+    size = struct.unpack(">II", blob[16:24])
+    if size != EXPECTED:
+        raise ValueError(
+            f"expected {EXPECTED[0]}x{EXPECTED[1]}, got {size[0]}x{size[1]}"
+        )
+    return size
 
 
 def main():
-    os.makedirs("/output", exist_ok=True)
-    shutil.copyfile(SRC, DST)
-    width, height = verify(DST)
-    print(f"wrote {DST} ({os.path.getsize(DST)} bytes, {width}x{height} PNG)")
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(IMAGE, OUTPUT)
+    width, height = check_png(OUTPUT)
+    print(f"wrote {OUTPUT} ({OUTPUT.stat().st_size} bytes, {width}x{height} PNG)")
 
 
 if __name__ == "__main__":
